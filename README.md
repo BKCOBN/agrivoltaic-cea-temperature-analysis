@@ -1,5 +1,5 @@
 # agrivoltaic-cea-temperature-analysis
-Scripts for cleaning and processing temperature sensor data from a rack greenhouse experiment. There are two scripts: one that converts raw TXT log files into a structured Excel workbook for each month, and one that reads those workbooks and generates summary charts.
+Companion code for the paper *"Low-cost adaptation of agrivoltaic infrastructure for controlled-environment agriculture to extend the growing season in northern latitudes"* by Beril Coban. There are two scripts: one that converts raw TXT log files from a rack greenhouse agrivoltaic study into a structured Excel workbook for each month, and one that reads those workbooks and generates summary charts.
 
 ---
 
@@ -15,7 +15,7 @@ pip install openpyxl
 
 ## process_month.py
 
-Combines daily TXT sensor log files for a single month into one formatted Excel workbook. It strips repeated column headers that the logger writes at the start of each 30-minute block, extracts sensor columns T01 through T06, inserts per-row average formulas, and adds a month-wide summary row at the bottom.
+Combines daily TXT sensor log files for a single month into one formatted Excel workbook. It strips the repeated column headers the logger writes after every pair of readings (every 30 minutes), extracts sensor columns T01 through T06, inserts per-row average formulas, and adds a month-wide summary row at the bottom.
 
 ### Setup
 
@@ -82,7 +82,7 @@ The output is a single `.xlsx` workbook with one sheet named after the month (e.
 | J | T06 |
 | K | `=AVERAGE(I:J)` — Control |
 
-- **Row 1** — header row. Columns A and B show the timestamp of the first log entry; C through K show sensor and group labels.
+- **Row 1** — header row. Columns A and B show the date and wall-clock time of the first column-header line found in the log files; C through K show sensor and group labels.
 - **Rows 2 to N** — one row per sensor reading.
 - **Last row** — month-wide column averages, with no date or time values.
 
@@ -111,7 +111,7 @@ Rather than plotting a full month of data, `plot_charts.py` picks one representa
 
 ### Setup
 
-Open `plot_charts.py` and confirm the `MONTHS` list at the top matches your generated files:
+Before running, open `plot_charts.py` and check that the `MONTHS` list at the top matches your generated files:
 
 ```python
 MONTHS = [
