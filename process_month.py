@@ -13,6 +13,7 @@ from openpyxl.utils import get_column_letter
 
 
 _WALLCLOCK_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(.*)', re.DOTALL)
+_DATA_DATE_RE = re.compile(r'^\d{4}/\d{2}/\d{2}$')
 
 
 def parse_line(line):
@@ -37,6 +38,10 @@ def parse_line(line):
     # Data line: DATA_DATE DATA_TIME RECORD# T01 T02 T03 T04 T05 T06 T07 T08 [optional...]
     parts = remainder.split()
     if len(parts) < 9:
+        return (wc_date, wc_time, 'blank', None)
+
+    # Reject logger boot/status messages that happen to have enough tokens
+    if not _DATA_DATE_RE.match(parts[0]):
         return (wc_date, wc_time, 'blank', None)
 
     fields = []
