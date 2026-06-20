@@ -13,7 +13,7 @@ pip install openpyxl
 
 ## process_month.py
 
-Combines daily TXT sensor log files for a single month into one formatted Excel workbook. Strips repeated column headers, extracts sensor columns T01–T06, inserts per-row average formulas, and adds a month-wide summary row at the bottom.
+Takes daily TXT sensor log files for a single month and outputs one formatted Excel workbook. Handles filtering of repeated headers, extracts T01–T06, adds per-row average formulas, and puts a summary row at the bottom.
 
 Edit the two lines at the top before running:
 

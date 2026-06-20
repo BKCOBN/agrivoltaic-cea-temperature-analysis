@@ -12,7 +12,7 @@ date_re = re.compile(r'^\d{4}/\d{2}/\d{2}$')
 
 
 def parse_line(line):
-    # returns (date, time, kind, temps) or None if no wall clock prefix found
+    # None if line doesn't start with a wall-clock timestamp
     m = ts_re.match(line)
     if not m:
         return None
@@ -48,7 +48,7 @@ def parse_line(line):
 
 
 def read_logs(folder_path):
-    # returns (hdr, readings), hdr = wall clock time of the first header seen
+    # hdr = timestamp of the first header line seen
     folder = Path(folder_path)
     files = list(folder.glob('RDL_*_USB0.txt'))
     files.sort()  # alphabetical = chronological (YYYY-MM-DD names)

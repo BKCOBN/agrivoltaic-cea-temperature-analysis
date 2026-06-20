@@ -243,7 +243,7 @@ def main():
         rdate = rep_day(data)
         peak = peak_dt_day(data)
 
-        # collect means + pull out readings for both special days in one pass
+        # build means + grab rows for rep day + peak day while we're at it
         pot = []
         air = []
         ctrl = []
