@@ -3,16 +3,18 @@ from pathlib import Path
 import openpyxl
 from openpyxl.chart import BarChart, LineChart, Reference, Series
 
+# reads *_MET_matched.xlsx +- writes Summary_Charts.xlsx w/ 7 sheets
+
 # update these paths if your filenames differ
 MONTHS = [
-    ("October_generated.xlsx",  "October"),
-    ("November_generated.xlsx", "November"),
-    ("December_generated.xlsx", "December"),
+    ("October_MET_matched.xlsx", "October"),
+    ("November_MET_matched.xlsx", "November"),
+    ("December_MET_matched.xlsx", "December"),
 ]
 OUT_FILE = "Summary_Charts.xlsx"
 
-LABELS = ["Under Modules inside Pots", "Under Modules", "Control"]
-COLORS = ["4472C4", "ED7D31", "70AD47"]  # blue, orange, green
+LABELS = ["Soil Under Rack", "Air Under Rack", "Soil Outside", "MET Ambient"]
+COLORS = ["4472C4", "ED7D31", "70AD47", "FF0000"]  # blue, orange, green, red
 
 DAY_TABS = {
     "October": "Oct Day",
@@ -40,12 +42,12 @@ def avg(vals):
 
 
 def read_xlsx(path):
-    # skip E/H/K (formula cols), recompute avgs from raw pairs
+    # read *_MET_matched.xlsx, cols C=soil_under, D=air_under, E=soil_outside, F=met_ambient
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb.active
     rows = []
     for row in ws.iter_rows(min_row=2, values_only=True):
-        if len(row) < 10 or row[0] == None:
+        if len(row) < 6 or row[0] is None:
             continue
         dval = row[0]
         rdate = None
@@ -53,54 +55,28 @@ def read_xlsx(path):
             rdate = dval.date()
         elif isinstance(dval, date):
             rdate = dval
-        if rdate == None:
+        if rdate is None:
             continue
         tv = row[1]
+        rtime = None
         if isinstance(tv, time):
             rtime = tv
         elif isinstance(tv, datetime):
             rtime = tv.time()
         elif isinstance(tv, float):
-            # time stored as fraction of day (0.5 = noon)
             sec = round(tv * 86400)
             rtime = time(sec // 3600 % 24, sec % 3600 // 60, sec % 60)
-        else:
+        if rtime is None:
             continue
-
-        t01, t02 = row[2], row[3]
-        if t01 is not None and t02 is not None:
-            pot = (t01 + t02) / 2
-        else:
-            pot = t01 if t01 is not None else t02
-
-        t03, t04 = row[5], row[6]
-        if t03 is not None and t04 is not None:
-            air = (t03 + t04) / 2
-        else:
-            air = t03 if t03 is not None else t04
-
-        t05, t06 = row[8], row[9]
-        if t05 is not None and t06 is not None:
-            ctrl = (t05 + t06) / 2
-        else:
-            ctrl = t05 if t05 is not None else t06
-
-        rows.append((rdate, rtime, pot, air, ctrl))
+        rows.append((rdate, rtime, row[2], row[3], row[4], row[5]))
     return rows
 
 
 def rep_day(data):
-    # which day is most "average" for the month
+    # pick day whose mean MET ambient is closest to monthly mean MET ambient
     if not data:
         return None
-    pot = []
-    air = []
-    ctrl = []
-    for r in data:
-        pot.append(r[2])
-        air.append(r[3])
-        ctrl.append(r[4])
-    mnthly = (avg(pot), avg(air), avg(ctrl))
+    monthly_met = avg([r[5] for r in data])
 
     by_day = {}
     for r in data:
@@ -111,20 +87,8 @@ def rep_day(data):
     rdate = None
     mdist = None
     for d, day in by_day.items():
-        pv = []
-        av = []
-        cv = []
-        for r in day:
-            pv.append(r[2])
-            av.append(r[3])
-            cv.append(r[4])
-        dmeans = (avg(pv), avg(av), avg(cv))
-        # euclidean dist from monthly avg across all 3 groups
-        dsq = 0.0
-        dsq += (dmeans[0] - mnthly[0]) ** 2
-        dsq += (dmeans[1] - mnthly[1]) ** 2
-        dsq += (dmeans[2] - mnthly[2]) ** 2
-        dist = dsq ** 0.5
+        daily_met = avg([r[5] for r in day])
+        dist = abs(daily_met - monthly_met)
         if mdist is None or dist < mdist:
             mdist = dist
             rdate = d
@@ -132,7 +96,7 @@ def rep_day(data):
 
 
 def peak_dt_day(data):
-    # find the day where pots ran hottest relative to control
+    # find day where under-rack air ran hottest relative to MET ambient
     if not data:
         return None
     by_day = {}
@@ -143,12 +107,8 @@ def peak_dt_day(data):
     pdate = None
     mdt = None
     for d, day in by_day.items():
-        pot = []
-        ctrl = []
-        for r in day:
-            pot.append(r[2])
-            ctrl.append(r[4])
-        dt = avg(pot) - avg(ctrl)
+        dts = [r[3] - r[5] for r in day if r[3] is not None and r[5] is not None]
+        dt = avg(dts)
         if mdt is None or dt > mdt:
             mdt = dt
             pdate = d
@@ -156,13 +116,13 @@ def peak_dt_day(data):
 
 
 def day_sheet(wb, name, day_rows):
-    # format time as string or Excel treats it as a number
+    # format time as string, Excel treats raw time vals as numbers
     if name in wb.sheetnames:
         del wb[name]
     ws = wb.create_sheet(name)
     ws.append(["Time"] + LABELS)
-    for _, t, g1, g2, g3 in day_rows:
-        ws.append([t.strftime("%H:%M:%S"), g1, g2, g3])
+    for _, t, su, au, so, met in day_rows:
+        ws.append([t.strftime("%H:%M:%S"), su, au, so, met])
     return ws
 
 
@@ -176,7 +136,7 @@ def bar_chart(ws, n):
     chart.width = 22
     chart.height = 14
     col_idx = 2
-    for color in COLORS:  # one series per treatment group
+    for color in COLORS:  # one series /treatment group
         data = Reference(ws, min_col=col_idx, min_row=1, max_row=n + 1)
         series = Series(data, title_from_data=True)
         series.graphicalProperties.solidFill = color
@@ -213,7 +173,7 @@ def write_workbook(months, out):
     ws_sum.title = "Summary"
     ws_sum.append(["Month"] + LABELS)
     for m in months:
-        ws_sum.append([m["name"], m["means"][0], m["means"][1], m["means"][2]])
+        ws_sum.append([m["name"], m["means"][0], m["means"][1], m["means"][2], m["means"][3]])
     ws_sum.add_chart(bar_chart(ws_sum, len(months)), "F2")
 
     for m in months:
@@ -243,24 +203,14 @@ def main():
         rdate = rep_day(data)
         peak = peak_dt_day(data)
 
-        # build means + grab rows for rep day + peak day while we're at it
-        pot = []
-        air = []
-        ctrl = []
-        rep_rows = []
-        dt_rows = []
-        for r in data:
-            pot.append(r[2])
-            air.append(r[3])
-            ctrl.append(r[4])
-            if r[0] == rdate:
-                rep_rows.append(r)
-            if r[0] == peak:
-                dt_rows.append(r)
+        # grab means + rep day rows + peak day rows in one pass
+        rep_rows = [r for r in data if r[0] == rdate]
+        dt_rows = [r for r in data if r[0] == peak]
 
         months.append({
             "name": mname,
-            "means": (avg(pot), avg(air), avg(ctrl)),
+            "means": (avg([r[2] for r in data]), avg([r[3] for r in data]),
+                      avg([r[4] for r in data]), avg([r[5] for r in data])),
             "rep_date": rdate,
             "rep_rows": rep_rows,
             "peak": peak,
